@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Home, Plus, Search, ShoppingBasket, Sparkles, TrendingUp, Users } from "lucide-react";
+import { Check, ChevronDown, Home, Pencil, Plus, Search, ShoppingBasket, Sparkles, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shell/app-shell";
@@ -19,16 +19,21 @@ import { formatQty } from "@/lib/household/predict";
 import type { HouseholdMember } from "@/lib/household/types";
 import { toMinor } from "@/lib/money";
 import { pushConfigured } from "@/lib/push-client";
+import { Catalog } from "./catalog";
+import { CatalogItemSheet, type CatalogEditTarget } from "./catalog-item-sheet";
 import { ItemDetailSheet } from "./item-detail-sheet";
+import { ItemImage } from "./item-image";
 import { PurchaseSheet } from "./purchase-sheet";
 import { RequestSheet, type RequestTarget } from "./request-sheet";
 import { StockPill, stockLevel } from "./stock";
 
-type Tab = "list" | "pantry" | "insights";
+type Tab = "list" | "catalog" | "pantry" | "insights";
 
-function initialTab(): Tab {
-  const t = new URLSearchParams(window.location.search).get("tab");
-  return t === "pantry" || t === "insights" ? t : "list";
+function initialTab(fallback: Tab): Tab {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("add")) return "catalog";
+  const t = params.get("tab");
+  return t === "pantry" || t === "insights" || t === "catalog" || t === "list" ? t : fallback;
 }
 
 export function HouseholdView() {
@@ -111,16 +116,17 @@ function HouseholdHome({
   const today = useToday();
   const toast = useToast();
   const { views, data, isLoading } = useHouseholdData(householdId);
-  const [tab, setTab] = useState<Tab>(initialTab);
-  const [requestTarget, setRequestTarget] = useState<RequestTarget | null>(() =>
-    new URLSearchParams(window.location.search).get("add") ? {} : null,
-  );
+  const financeUser = useSettings().data?.finance_enabled !== false;
+  // family members mostly add things, so they start on the catalogue
+  const [tab, setTab] = useState<Tab>(() => initialTab(financeUser ? "list" : "catalog"));
+  const [requestTarget, setRequestTarget] = useState<RequestTarget | null>(null);
+  const [editTarget, setEditTarget] = useState<CatalogEditTarget | null>(null);
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
 
   useEffect(() => {
-    const open = () => setRequestTarget({});
+    const open = () => setTab("catalog");
     window.addEventListener("myfin:add-shopping", open);
     if (new URLSearchParams(window.location.search).get("add")) window.history.replaceState(null, "", "/household");
     return () => window.removeEventListener("myfin:add-shopping", open);
@@ -163,7 +169,11 @@ function HouseholdHome({
           </span>
         }
         actions={
-          <Button size="icon" aria-label="Add to shopping list" onClick={() => setRequestTarget({})}>
+          <Button
+            size="icon"
+            aria-label={tab === "catalog" ? "New catalogue item" : "Add to shopping list"}
+            onClick={() => (tab === "catalog" ? setEditTarget({ create: true }) : setTab("catalog"))}
+          >
             <Plus className="h-5 w-5" />
           </Button>
         }
@@ -174,7 +184,8 @@ function HouseholdHome({
         value={tab}
         onChange={setTab}
         options={[
-          { value: "list", label: `Shopping list${onList.length ? ` · ${onList.length}` : ""}` },
+          { value: "list", label: `List${onList.length ? ` · ${onList.length}` : ""}` },
+          { value: "catalog", label: "Add items" },
           { value: "pantry", label: "Pantry" },
           { value: "insights", label: "Insights" },
         ]}
@@ -198,8 +209,12 @@ function HouseholdHome({
                 <ul className="mt-2 divide-y divide-line">
                   {suggestions.map((v) => (
                     <li key={v.item.id} className="flex items-center gap-3 px-5 py-3">
+                      <ItemImage item={v.item} />
                       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setDetailId(v.item.id)}>
-                        <p className="truncate text-[15px] font-medium">{v.item.name}</p>
+                        <p className="truncate text-[15px] font-medium">
+                          {v.item.name}
+                          {v.item.name_bn ? <span className="font-normal text-ink-3"> · {v.item.name_bn}</span> : null}
+                        </p>
                         <p className="text-[12.5px] text-ink-3">
                           {v.prediction.status === "out" ? "Probably finished" : `About ${v.prediction.daysLeft} day${v.prediction.daysLeft === 1 ? "" : "s"} left`}
                           {v.prediction.suggestedQty ? ` · usually ${formatQty(v.prediction.suggestedQty, v.item.unit)}` : ""}
@@ -221,7 +236,7 @@ function HouseholdHome({
                   title="The list is empty"
                   body="Add anything that's running low — everyone in the household gets notified."
                   action={
-                    <Button size="sm" onClick={() => setRequestTarget({})}>
+                    <Button size="sm" onClick={() => setTab("catalog")}>
                       <Plus className="h-4 w-4" /> Add item
                     </Button>
                   }
@@ -231,28 +246,38 @@ function HouseholdHome({
                   {onList.map((v) => {
                     const r = v.openRequest!;
                     return (
-                      <li key={r.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                      <li key={r.id} className="flex items-center gap-1 pr-2">
                         <button
                           type="button"
                           aria-label={`Mark ${v.item.name} as bought`}
                           onClick={() => setBuyingId(v.item.id)}
-                          className="group -m-2 grid h-12 w-12 shrink-0 place-items-center rounded-full"
+                          className="group flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left transition hover:bg-surface-2 active:bg-surface-3/60 sm:pl-5"
                         >
-                          <span className="grid h-[30px] w-[30px] place-items-center rounded-full border-2 border-line-strong bg-surface transition group-hover:border-positive group-active:scale-90">
+                          <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full border-2 border-line-strong bg-surface transition group-hover:border-positive group-active:scale-90">
                             <Check className="h-4 w-4 text-positive opacity-0 transition group-hover:opacity-60" strokeWidth={3} />
                           </span>
+                          <ItemImage item={v.item} />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2">
+                              <span className="truncate text-[15px] font-medium">{v.item.name_bn ?? v.item.name}</span>
+                              {r.urgency === "urgent" ? <Pill tone="negative">Urgent</Pill> : null}
+                            </span>
+                            <span className="block truncate text-[12.5px] text-ink-3">
+                              {v.item.name_bn ? `${v.item.name} · ` : ""}
+                              {who(r.requested_by)} · {timeAgo(r.requested_at)}
+                              {r.note ? ` · ${r.note}` : ""}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-[15px] font-semibold tabular">{r.qty ? formatQty(r.qty, v.item.unit) : ""}</span>
                         </button>
-                        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setRequestTarget({ request: r })}>
-                          <p className="flex items-center gap-2">
-                            <span className="truncate text-[15px] font-medium">{v.item.name}</span>
-                            {r.urgency === "urgent" ? <Pill tone="negative">Urgent</Pill> : null}
-                          </p>
-                          <p className="truncate text-[12.5px] text-ink-3">
-                            {who(r.requested_by)} · {timeAgo(r.requested_at)}
-                            {r.note ? ` · ${r.note}` : ""}
-                          </p>
+                        <button
+                          type="button"
+                          aria-label={`Change ${v.item.name}`}
+                          onClick={() => setRequestTarget({ request: r })}
+                          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-surface-3 hover:text-ink"
+                        >
+                          <Pencil className="h-4 w-4" />
                         </button>
-                        <span className="shrink-0 text-[15px] font-semibold tabular">{r.qty ? formatQty(r.qty, v.item.unit) : ""}</span>
                       </li>
                     );
                   })}
@@ -273,6 +298,13 @@ function HouseholdHome({
             </Card>
           </aside>
         </div>
+      ) : tab === "catalog" ? (
+        <Catalog
+          views={all}
+          onEditRequest={(v) => v.openRequest && setRequestTarget({ request: v.openRequest })}
+          onEditItem={(v) => setEditTarget({ item: v.item })}
+          onNewItem={(category) => setEditTarget({ create: true, category })}
+        />
       ) : tab === "pantry" ? (
         <Pantry views={all} onOpen={(id) => setDetailId(id)} />
       ) : (
@@ -281,10 +313,15 @@ function HouseholdHome({
 
       <RequestSheet target={requestTarget} views={all} onClose={() => setRequestTarget(null)} />
       <PurchaseSheet view={all.find((v) => v.item.id === buyingId) ?? null} stores={stores} onClose={() => setBuyingId(null)} />
+      <CatalogItemSheet target={editTarget} householdId={householdId} onClose={() => setEditTarget(null)} />
       <ItemDetailSheet
         view={all.find((v) => v.item.id === detailId) ?? null}
         members={members}
         onClose={() => setDetailId(null)}
+        onEdit={(v) => {
+          setDetailId(null);
+          setEditTarget({ item: v.item });
+        }}
         onAddToList={(v) => {
           setDetailId(null);
           setRequestTarget({ itemId: v.item.id });
@@ -364,9 +401,13 @@ function Pantry({ views, onOpen }: { views: ItemView[]; onOpen: (id: string) => 
               return (
                 <li key={v.item.id}>
                   <button type="button" onClick={() => onOpen(v.item.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-surface-2 sm:px-5">
+                    <ItemImage item={v.item} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="truncate text-[15px] font-medium">{v.item.name}</p>
+                        <p className="truncate text-[15px] font-medium">
+                          {v.item.name}
+                          {v.item.name_bn ? <span className="font-normal text-ink-3"> · {v.item.name_bn}</span> : null}
+                        </p>
                         <StockPill view={v} />
                       </div>
                       <p className="truncate text-[12.5px] text-ink-3">

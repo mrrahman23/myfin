@@ -18,6 +18,7 @@ A mobile-first personal finance app that replaces a monthly income/expense sprea
 | **Transactions** | Income / expense / transfer / adjustment ledger with search, type/category/method filters, date presets and custom range, edit, delete with confirmation and undo, CSV export. |
 | **Analytics** | Year switcher, income/expenses/savings, savings rate, average/highest/lowest spending month, outstanding liabilities & receivables, income-vs-expense bars (with table view), savings trend, category donut, budget variance chart, budget-vs-actual table. |
 | **Reminders** | Set a due date on any item (tap it in the budget). Every morning (08:30 Dhaka) a push notification lists bills due within your "days before" window, due today, and overdue — even when the app is closed. |
+| **Catalogue** | ~60 everyday items pre-loaded in English and বাংলা with pictures (emoji, or a real photo of your brand taken on the phone), grouped by category with Bangla search. Family members tap an item to add it to the list with its usual quantity (Undo available); tap again to change quantity, mark urgent or add a note. |
 | **Household** | Shared shopping list with your family (separate logins; finances stay private). Adding an item notifies the others instantly; marking it bought (qty, price, shop) notifies the person who asked, optionally records the cost under *Groceries* in your expenses, and teaches myFin how long that quantity lasts. Pantry forecasts ("~5 days left"), "running low soon" suggestions and a morning run-out alert, price history (per-unit price, % change, cheapest shop) and spending insights. |
 | **Recurring** | Monthly, weekly, yearly and custom (every N days/weeks/months) rules. Items are generated once per month — reopening a month never duplicates, and deleted items stay deleted. |
 | **Settings** | Profile, currency, timezone, theme (auto/light/dark), notifications, categories (icons, groups, default budget, due day, carry-forward, archive), payment methods (default for one-tap), recurring items, CSV export, JSON backup & restore, password/email change, sign out everywhere, install guide. |
@@ -70,7 +71,7 @@ Duplicate protection: one-tap pay locks the category's items (`SELECT … FOR UP
 
 Accounts created before the migration was applied get their defaults on first sign-in (`seed_my_defaults`).
 
-Run **both** migration files, in order (`…_init.sql`, then `…_household.sql`).
+Run **all** migration files, in order (`…_init.sql`, `…_household.sql`, `…_catalog.sql`). The catalogue migration also creates the public `household-photos` Storage bucket (writes limited to household members) and loads the starter catalogue into existing households.
 
 ### What the migrations create
 
@@ -121,7 +122,7 @@ Useful scripts:
 | `npm run assets` | Regenerates icons and iOS launch screens into `public/`. |
 | `npm run mock` + `npm run dev:mock` | **No Supabase needed:** an in-memory Supabase stand-in running the real migration in PGlite, with any email/password accepted. Good for UI work and demos. |
 
-End-to-end tests: `tests/e2e/household.cjs` (two iPhones, invite, instant push delivery to a local HTTPS sink, forecasts, cron) and the smoke test (iPhone 13 + desktop, 16 steps incl. the carry-forward example): start `npm run mock` and `npm run dev:mock`, then `npm i --no-save playwright && npx playwright install chromium && node tests/e2e/smoke.cjs`. Screenshots land in `.e2e-shots/`.
+End-to-end tests: `tests/e2e/catalog.cjs` (bilingual tap-to-add, Bangla search, photo upload, buying), `tests/e2e/household.cjs` (two iPhones, invite, instant push delivery to a local HTTPS sink, forecasts, cron) and the smoke test (iPhone 13 + desktop, 16 steps incl. the carry-forward example): start `npm run mock` and `npm run dev:mock`, then `npm i --no-save playwright && npx playwright install chromium && node tests/e2e/smoke.cjs`. Screenshots land in `.e2e-shots/`.
 
 ---
 

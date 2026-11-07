@@ -12,6 +12,7 @@ import type { ItemView } from "@/lib/household/hooks";
 import { cancelRequest, requestItem, updateRequest } from "@/lib/household/mutations";
 import { formatQty } from "@/lib/household/predict";
 import { COMMON_ITEMS, ITEM_CATEGORIES, UNITS, type ShoppingRequest } from "@/lib/household/types";
+import { ItemImage } from "./item-image";
 
 export interface RequestTarget {
   /** Existing request to edit. */
@@ -137,7 +138,13 @@ function RequestForm({ target, views, onDone }: { target: RequestTarget; views: 
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
       {target.request || target.itemId ? (
-        <p className="rounded-2xl bg-surface-2 px-4 py-3 text-[17px] font-semibold">{existing?.item.name}</p>
+        <div className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-3">
+          {existing ? <ItemImage item={existing.item} /> : null}
+          <p className="min-w-0">
+            <span className="block truncate text-[17px] font-semibold">{existing?.item.name_bn ?? existing?.item.name}</span>
+            {existing?.item.name_bn ? <span className="block truncate text-[13px] text-ink-3">{existing.item.name}</span> : null}
+          </p>
+        </div>
       ) : (
         <>
           <Field label="Item" htmlFor="req-name">

@@ -90,7 +90,36 @@ export async function deletePurchase(id: string) {
   await refreshAll();
 }
 
-export async function updateItem(id: string, patch: { name?: string; unit?: string; category?: string | null; is_archived?: boolean }) {
+export type ItemPatch = {
+  name?: string;
+  name_bn?: string | null;
+  emoji?: string | null;
+  image_url?: string | null;
+  unit?: string;
+  category?: string | null;
+  default_qty?: number | null;
+  is_archived?: boolean;
+};
+
+export async function createItem(householdId: string, item: ItemPatch & { name: string; unit: string }): Promise<string> {
+  const row = unwrap(
+    await getSupabase()
+      .from("household_items")
+      .insert({ ...item, household_id: householdId, name: item.name.trim(), name_bn: item.name_bn?.trim() || null })
+      .select("id")
+      .single(),
+  ) as { id: string };
+  await refreshAll();
+  return row.id;
+}
+
+export async function addStarterItems(): Promise<number> {
+  const n = unwrap(await getSupabase().rpc("add_starter_items")) as number;
+  await refreshAll();
+  return n;
+}
+
+export async function updateItem(id: string, patch: ItemPatch) {
   unwrap(await getSupabase().from("household_items").update(patch).eq("id", id));
   await refreshAll();
 }

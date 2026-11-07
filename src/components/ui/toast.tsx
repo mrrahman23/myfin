@@ -10,9 +10,11 @@ interface ToastItem {
   message: string;
   tone: Tone;
   action?: { label: string; onClick: () => void | Promise<void> };
+  group?: string;
 }
 interface ToastApi {
-  show: (message: string, opts?: { tone?: Tone; action?: ToastItem["action"]; duration?: number }) => void;
+  /** `group`: a new toast replaces any visible toast of the same group. */
+  show: (message: string, opts?: { tone?: Tone; action?: ToastItem["action"]; duration?: number; group?: string }) => void;
   success: (message: string, action?: ToastItem["action"]) => void;
   error: (message: string) => void;
 }
@@ -28,8 +30,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback<ToastApi["show"]>(
     (message, opts = {}) => {
       const id = nextId.current++;
-      const item: ToastItem = { id, message, tone: opts.tone ?? "info", action: opts.action };
-      setItems((list) => [...list.slice(-2), item]);
+      const item: ToastItem = { id, message, tone: opts.tone ?? "info", action: opts.action, group: opts.group };
+      setItems((list) => [...list.filter((t) => !opts.group || t.group !== opts.group).slice(-2), item]);
       window.setTimeout(() => dismiss(id), opts.duration ?? (opts.action ? 6000 : 3200));
     },
     [dismiss],

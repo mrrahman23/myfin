@@ -25,6 +25,10 @@ export interface HouseholdItem {
   is_archived: boolean;
   created_by: string | null;
   created_at: string;
+  name_bn: string | null;
+  emoji: string | null;
+  image_url: string | null;
+  sort_order: number;
 }
 
 export interface ShoppingRequest {
@@ -56,7 +60,7 @@ export interface HouseholdPurchase {
   created_at: string;
 }
 
-export const UNITS = ["kg", "g", "L", "ml", "pcs", "dozen", "pack", "bottle", "box", "bag"] as const;
+export const UNITS = ["kg", "g", "L", "ml", "pcs", "dozen", "pack", "bunch", "bottle", "box", "bag"] as const;
 
 export const ITEM_CATEGORIES = [
   "Grains & Flour",
@@ -69,6 +73,7 @@ export const ITEM_CATEGORIES = [
   "Spices",
   "Beverages",
   "Snacks",
+  "Frozen",
   "Cleaning",
   "Personal care",
   "Baby",
@@ -102,3 +107,16 @@ export const COMMON_ITEMS: ReadonlyArray<readonly [string, string, string]> = [
   ["Shampoo", "bottle", "Personal care"],
   ["Tissue", "pack", "Personal care"],
 ];
+
+/** Emoji offered when picking a picture for an item. */
+export const ITEM_EMOJI = [
+  "🍚", "🌾", "🍞", "🫓", "🍘", "🥣", "🍬", "🧂", "🛢️", "🫙", "🫘", "🫛", "🟡", "🍛", "🌶️", "🧅", "🧄", "🫚",
+  "🌿", "🍅", "🥔", "🍆", "🥒", "🎃", "🥕", "🥬", "🥦", "🌽", "🍋", "🍌", "🍎", "🍊", "🍇", "🍉", "🥭", "🍍",
+  "🥥", "🍗", "🐓", "🥩", "🐟", "🐠", "🦐", "🥚", "🥛", "🧈", "🧀", "🍵", "☕", "🧃", "🥤", "💧", "🍪", "🍫",
+  "🍜", "🧊", "👶", "🧴", "🧻", "🪥", "🧼", "🫧", "🧽", "🍽️", "🗑️", "💡", "🔋", "💊", "🩹", "🛒",
+] as const;
+
+/** Both names for display/search. */
+export function itemNames(item: Pick<HouseholdItem, "name" | "name_bn">) {
+  return item.name_bn ? `${item.name} · ${item.name_bn}` : item.name;
+}

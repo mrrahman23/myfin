@@ -117,21 +117,22 @@ function fakeSubscription(path) {
     await wife.getByLabel("Password").fill("sadia-pass-1");
     await wife.getByRole("button", { name: "Sign in" }).click();
     await wife.waitForURL(/\/household/);
-    await wife.getByText("The list is empty").waitFor();
+    await wife.getByText("চাল", { exact: true }).waitFor(); // opens on the catalogue
     const tabs = await wife.locator("nav[aria-label=Main] a:visible").allInnerTexts();
     if (tabs.join(",") !== "Household,Settings") throw new Error("tabs: " + tabs.join(","));
     await shotW("04-wife-home");
   });
   await step("wife adds Rice (urgent) → owner gets a push", async () => {
     pushes.length = 0;
-    await wife.getByRole("button", { name: "Quick add" }).click();
-    await wife.getByLabel("Item").fill("Rice");
-    await wife.getByLabel("Quantity (optional)").fill("5");
+    await wife.getByRole("button", { name: /^Rice, চাল\. Tap to add/ }).click();
+    await wife.getByText(/^চাল · 5 kg added$/).waitFor();
+    // tap again to mark it urgent with a note
+    await wife.getByRole("button", { name: /^Rice, চাল\. On the list/ }).click();
     await wife.getByRole("switch", { name: "Urgent" }).click();
     await wife.getByLabel("Note").fill("Miniket");
     await shotW("05-wife-add");
-    await wife.getByRole("button", { name: "Add to list" }).click();
-    await wife.getByText("Rice added to the list").waitFor();
+    await wife.getByRole("button", { name: "Save" }).click();
+    await wife.getByText("Updated").waitFor();
     await wife.getByText("Sadia").waitFor({ state: "detached" }).catch(() => {});
     for (let i = 0; i < 20 && !pushes.length; i++) await wife.waitForTimeout(250);
     if (!pushes.find((p) => p.path === "/owner")) throw new Error("no push to owner: " + JSON.stringify(pushes));
@@ -141,8 +142,9 @@ function fakeSubscription(path) {
   });
   await step("owner sees request and marks bought with price → expense", async () => {
     await owner.goto("/household");
-    await owner.getByText("Rice", { exact: true }).waitFor();
+    await owner.getByRole("button", { name: "Mark Rice as bought" }).waitFor();
     await owner.getByText(/Sadia · /).waitFor();
+    await owner.getByText("Urgent").waitFor();
     await shotO("07-owner-list");
     pushes.length = 0;
     await owner.getByRole("button", { name: "Mark Rice as bought" }).click();
@@ -172,9 +174,9 @@ function fakeSubscription(path) {
     const hh = (await rest(o, "household_members?select=household_id"))[0].household_id;
     const today = new Date(Date.now() + 6 * 3600e3).toISOString().slice(0, 10);
     const day = (n) => new Date(new Date(today).getTime() + n * 86400e3).toISOString().slice(0, 10);
-    const addItem = async (name, unit, cat) => (await rest(o, "household_items", { method: "POST", body: JSON.stringify({ household_id: hh, name, unit, category: cat }) }))[0].id;
-    const oil = await addItem("Soybean Oil", "L", "Oil & Ghee");
-    const eggs = await addItem("Eggs", "dozen", "Dairy & Eggs");
+    const itemId = async (name) => (await rest(o, `household_items?select=id&name=eq.${encodeURIComponent(name)}`))[0].id;
+    const oil = await itemId("Soybean Oil");
+    const eggs = await itemId("Eggs");
     const buys = [
       [oil, day(-30), 2, 360], [oil, day(-16), 2, 380], [oil, day(-2), 2, 400],
       [eggs, day(-13), 1, 150], [eggs, day(-6), 1, 155],
@@ -184,12 +186,12 @@ function fakeSubscription(path) {
     }
     await owner.goto("/household");
     await owner.getByText("Running low soon").waitFor();
-    await owner.getByText("Eggs", { exact: true }).waitFor();
+    await owner.getByText(/^Eggs/).first().waitFor();
     await shotO("10-suggestions");
     await owner.getByRole("tab", { name: "Pantry" }).click();
-    await owner.getByText("Soybean Oil").waitFor();
+    await owner.getByText(/^Soybean Oil/).first().waitFor();
     await shotO("11-pantry");
-    await owner.getByText("Soybean Oil").click();
+    await owner.getByText(/^Soybean Oil/).first().click();
     await owner.getByRole("dialog").getByText(/2 L lasts 2 weeks|2 L lasts about 2 weeks|2 L lasts 14 days/).waitFor();
     await owner.screenshot({ path: `${OUT}/12-item-detail.png`, fullPage: false });
     await owner.getByRole("button", { name: "Close" }).click();

@@ -1,9 +1,9 @@
 "use client";
 
-import { Archive, ArchiveRestore, Pencil, ShoppingCart, Trash2 } from "lucide-react";
+import { Pencil, ShoppingCart, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Money } from "@/components/ui/money";
-import { Button, Field, Input, Select } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/primitives";
 import { ConfirmSheet, Sheet } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
@@ -11,10 +11,11 @@ import { formatDate } from "@/lib/dates";
 import { errorMessage } from "@/lib/data/errors";
 import { useToday } from "@/lib/data/hooks";
 import type { ItemView } from "@/lib/household/hooks";
-import { deletePurchase, updateItem } from "@/lib/household/mutations";
+import { deletePurchase } from "@/lib/household/mutations";
 import { formatDuration, formatQty } from "@/lib/household/predict";
-import { ITEM_CATEGORIES, UNITS, type HouseholdMember, type HouseholdPurchase } from "@/lib/household/types";
+import type { HouseholdMember, HouseholdPurchase } from "@/lib/household/types";
 import { toMinor } from "@/lib/money";
+import { ItemImage } from "./item-image";
 import { StockPill } from "./stock";
 
 export function ItemDetailSheet({
@@ -23,27 +24,23 @@ export function ItemDetailSheet({
   onClose,
   onAddToList,
   onBought,
+  onEdit,
 }: {
   view: ItemView | null;
   members: HouseholdMember[];
   onClose: () => void;
   onAddToList: (v: ItemView) => void;
   onBought: (v: ItemView) => void;
+  onEdit: (v: ItemView) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const close = () => {
-    setEditing(false);
-    onClose();
-  };
   return (
-    <Sheet open={Boolean(view)} onClose={close} title={view?.item.name ?? ""} description={view?.item.category ?? undefined}>
-      {view ? (
-        editing ? (
-          <EditItem view={view} onDone={() => setEditing(false)} />
-        ) : (
-          <Details view={view} members={members} onEdit={() => setEditing(true)} onAddToList={onAddToList} onBought={onBought} />
-        )
-      ) : null}
+    <Sheet
+      open={Boolean(view)}
+      onClose={onClose}
+      title={view?.item.name ?? ""}
+      description={view ? [view.item.name_bn, view.item.category].filter(Boolean).join(" · ") || undefined : undefined}
+    >
+      {view ? <Details view={view} members={members} onEdit={() => onEdit(view)} onAddToList={onAddToList} onBought={onBought} /> : null}
     </Sheet>
   );
 }
@@ -70,6 +67,13 @@ function Details({
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center gap-4">
+        <ItemImage item={item} size="lg" />
+        <p className="text-[13px] leading-relaxed text-ink-2">
+          Usually {item.default_qty ? formatQty(item.default_qty, item.unit) : `bought by the ${item.unit}`}
+          {view.purchases.length ? ` · bought ${view.purchases.length} time${view.purchases.length === 1 ? "" : "s"} this year` : ""}
+        </p>
+      </div>
       <div className="rounded-2xl bg-surface-2 p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[12px] font-medium uppercase tracking-wide text-ink-3">Stock forecast</p>
@@ -169,7 +173,7 @@ function Details({
       </section>
 
       <Button variant="ghost" className="w-full" onClick={onEdit}>
-        <Pencil className="h-4 w-4" /> Edit item
+        <Pencil className="h-4 w-4" /> Edit name, picture or unit
       </Button>
 
       <ConfirmSheet
@@ -192,76 +196,5 @@ function Details({
         }}
       />
     </div>
-  );
-}
-
-function EditItem({ view, onDone }: { view: ItemView; onDone: () => void }) {
-  const toast = useToast();
-  const [name, setName] = useState(view.item.name);
-  const [unit, setUnit] = useState(view.item.unit);
-  const [category, setCategory] = useState(view.item.category ?? "");
-  const [busy, setBusy] = useState(false);
-
-  async function save(patch: Parameters<typeof updateItem>[1], message: string) {
-    setBusy(true);
-    try {
-      await updateItem(view.item.id, patch);
-      toast.success(message);
-      onDone();
-    } catch (e) {
-      toast.error(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form
-      className="space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!name.trim()) return toast.error("Name is required");
-        void save({ name: name.trim(), unit, category: category || null }, "Item updated");
-      }}
-    >
-      <Field label="Name" htmlFor="it-name">
-        <Input id="it-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Unit" htmlFor="it-unit" hint={view.purchases.length ? "Changing it doesn't convert past purchases" : undefined}>
-          <Select id="it-unit" value={unit} onChange={(e) => setUnit(e.target.value)}>
-            {[...new Set([unit, ...UNITS])].map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Category" htmlFor="it-cat">
-          <Select id="it-cat" value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">None</option>
-            {[...new Set([...(category ? [category] : []), ...ITEM_CATEGORIES])].map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Button
-          variant="secondary"
-          onClick={() => save({ is_archived: !view.item.is_archived }, view.item.is_archived ? "Item restored" : "Item archived")}
-          disabled={busy}
-        >
-          {view.item.is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-          {view.item.is_archived ? "Restore" : "Archive"}
-        </Button>
-        <Button type="submit" loading={busy}>
-          Save
-        </Button>
-      </div>
-      <p className="text-[12px] text-ink-3">Archived items are hidden from the pantry and forecasts. History is kept.</p>
-    </form>
   );
 }

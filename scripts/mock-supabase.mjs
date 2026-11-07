@@ -43,6 +43,7 @@ console.log("mock-supabase: migrations applied");
 
 // --------------------------------------------------------------------------- auth
 const users = new Map(); // email -> user
+const files = new Map(); // "bucket/path" -> { data, type }
 const b64url = (s) => Buffer.from(s).toString("base64url");
 function makeSession(user) {
   const exp = Math.floor(Date.now() / 1000) + 3600 * 24;
@@ -193,7 +194,7 @@ async function rest(req, url, body, user) {
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS,HEAD",
-  "Access-Control-Allow-Headers": "authorization,apikey,content-type,prefer,accept,range,x-client-info,accept-profile,content-profile,x-supabase-api-version",
+  "Access-Control-Allow-Headers": "authorization,apikey,content-type,prefer,accept,range,x-client-info,accept-profile,content-profile,x-supabase-api-version,x-upsert,cache-control",
   "Access-Control-Expose-Headers": "content-range,x-supabase-api-version",
 };
 function send(res, status, json) {
@@ -204,11 +205,74 @@ function send(res, status, json) {
 createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(res, 204);
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const raw = Buffer.concat(chunks);
+
+  // --- Storage (public bucket for household photos)
+  if (url.pathname.startsWith("/storage/v1/object/")) {
+    const rest = decodeURIComponent(url.pathname.slice("/storage/v1/object/".length));
+    if (req.method === "GET" && rest.startsWith("public/")) {
+      const file = files.get(rest.slice("public/".length));
+      if (!file) return send(res, 404, { message: "Object not found" });
+      res.writeHead(200, { ...CORS, "Content-Type": file.type, "Cache-Control": "public, max-age=3600" });
+      return res.end(file.data);
+    }
+    const user = userFromAuth(req);
+    if (!user) return send(res, 401, { message: "unauthorized" });
+    const canWrite = async (key) => {
+      const [bucket, folder] = key.split("/");
+      if (bucket !== "household-photos") return false;
+      return db.transaction(async (tx) => {
+        await tx.query("set local role authenticated");
+        await tx.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: user.id })]);
+        const r = await tx.query("select public.is_household_member($1::uuid) ok", [folder]).catch(() => ({ rows: [{ ok: false }] }));
+        return r.rows[0]?.ok === true;
+      });
+    };
+    if (req.method === "POST" || req.method === "PUT") {
+      if (!(await canWrite(rest))) return send(res, 403, { statusCode: "403", error: "Unauthorized", message: "new row violates row-level security policy" });
+      let data = raw;
+      let type = req.headers["content-type"] ?? "application/octet-stream";
+      const boundary = /multipart\/form-data;\s*boundary=(.+)$/i.exec(type)?.[1];
+      if (boundary) {
+        // storage-js sends Blobs as multipart: take the part that carries the file
+        const sep = Buffer.from(`--${boundary}`);
+        let start = raw.indexOf(sep);
+        while (start !== -1) {
+          const next = raw.indexOf(sep, start + sep.length);
+          if (next === -1) break;
+          const part = raw.subarray(start + sep.length + 2, next - 2);
+          const headEnd = part.indexOf("\r\n\r\n");
+          const head = part.subarray(0, headEnd).toString();
+          if (/content-type:/i.test(head)) {
+            type = /content-type:\s*([^\r\n]+)/i.exec(head)[1].trim();
+            data = part.subarray(headEnd + 4);
+          }
+          start = next;
+        }
+      }
+      files.set(rest, { data, type });
+      return send(res, 200, { Key: rest, Id: randomUUID() });
+    }
+    if (req.method === "DELETE") {
+      const { prefixes = [] } = raw.length ? JSON.parse(raw.toString()) : {};
+      const removed = [];
+      for (const p of prefixes) {
+        const key = `${rest}/${p}`;
+        if (files.has(key) && (await canWrite(key))) {
+          files.delete(key);
+          removed.push({ name: p });
+        }
+      }
+      return send(res, 200, removed);
+    }
+    return send(res, 405, { message: "method not allowed" });
+  }
+
   let body = null;
   try {
-    const chunks = [];
-    for await (const c of req) chunks.push(c);
-    const text = Buffer.concat(chunks).toString();
+    const text = raw.toString();
     body = text ? JSON.parse(text) : null;
   } catch {
     return send(res, 400, { message: "invalid JSON" });

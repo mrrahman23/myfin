@@ -16,7 +16,12 @@ import { currencySymbol, formatMoney, parseAmount } from "@/lib/money";
 
 export function PurchaseSheet({ view, stores, onClose }: { view: ItemView | null; stores: string[]; onClose: () => void }) {
   return (
-    <Sheet open={Boolean(view)} onClose={onClose} title="Mark as bought" description={view?.item.name}>
+    <Sheet
+      open={Boolean(view)}
+      onClose={onClose}
+      title="Mark as bought"
+      description={view ? (view.item.name_bn ? `${view.item.name} · ${view.item.name_bn}` : view.item.name) : undefined}
+    >
       {view ? <PurchaseForm key={view.item.id} view={view} stores={stores} onDone={onClose} /> : null}
     </Sheet>
   );

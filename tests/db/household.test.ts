@@ -42,6 +42,24 @@ describe("household membership", () => {
     ]);
   });
 
+  it("new households start with the bilingual catalogue, and reloading it never duplicates", async () => {
+    const before = await as(db, WIFE, () =>
+      q<{ n: string; bn: string; emoji: string }>(
+        `select count(*) n, count(name_bn) bn, count(emoji) emoji from household_items`,
+      ),
+    );
+    expect(num(before[0].n)).toBeGreaterThanOrEqual(60);
+    expect(before[0].bn).toBe(before[0].n);
+    expect(before[0].emoji).toBe(before[0].n);
+    const rice = await as(db, WIFE, () => q<{ name_bn: string; unit: string }>(`select name_bn, unit from household_items where name = 'Rice'`));
+    expect(rice[0]).toMatchObject({ name_bn: "চাল", unit: "kg" });
+    await as(db, WIFE, () => q(`select add_starter_items()`));
+    const after = await as(db, WIFE, () => q<{ n: string }>(`select count(*) n from household_items`));
+    expect(after[0].n).toBe(before[0].n);
+    await expect(as(db, STRANGER, () => q(`select add_starter_items()`))).rejects.toThrow(/household first/);
+    await expect(as(db, WIFE, () => q(`select seed_household_catalog($1)`, [hid]))).rejects.toThrow(/permission denied/);
+  });
+
   it("clients cannot add members or call server-only functions", async () => {
     await expect(
       as(db, STRANGER, () => q(`insert into household_members (household_id, user_id, display_name) values ($1, $2, 'x')`, [hid, STRANGER])),
