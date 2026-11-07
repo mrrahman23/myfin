@@ -17,7 +17,8 @@ A mobile-first personal finance app that replaces a monthly income/expense sprea
 | **Carry-forward** | Unpaid balances roll into the next month for categories with carry-forward on (per category, income and expense). Never double-counted; each payment is linked to the original item. |
 | **Transactions** | Income / expense / transfer / adjustment ledger with search, type/category/method filters, date presets and custom range, edit, delete with confirmation and undo, CSV export. |
 | **Analytics** | Year switcher, income/expenses/savings, savings rate, average/highest/lowest spending month, outstanding liabilities & receivables, income-vs-expense bars (with table view), savings trend, category donut, budget variance chart, budget-vs-actual table. |
-| **Reminders** | Overdue / due-soon / later lists, browser notifications (one per day, respecting your "days before" preference), architecture ready for native push. |
+| **Reminders** | Set a due date on any item (tap it in the budget). Every morning (08:30 Dhaka) a push notification lists bills due within your "days before" window, due today, and overdue — even when the app is closed. |
+| **Household** | Shared shopping list with your family (separate logins; finances stay private). Adding an item notifies the others instantly; marking it bought (qty, price, shop) notifies the person who asked, optionally records the cost under *Groceries* in your expenses, and teaches myFin how long that quantity lasts. Pantry forecasts ("~5 days left"), "running low soon" suggestions and a morning run-out alert, price history (per-unit price, % change, cheapest shop) and spending insights. |
 | **Recurring** | Monthly, weekly, yearly and custom (every N days/weeks/months) rules. Items are generated once per month — reopening a month never duplicates, and deleted items stay deleted. |
 | **Settings** | Profile, currency, timezone, theme (auto/light/dark), notifications, categories (icons, groups, default budget, due day, carry-forward, archive), payment methods (default for one-tap), recurring items, CSV export, JSON backup & restore, password/email change, sign out everywhere, install guide. |
 
@@ -69,13 +70,16 @@ Duplicate protection: one-tap pay locks the category's items (`SELECT … FOR UP
 
 Accounts created before the migration was applied get their defaults on first sign-in (`seed_my_defaults`).
 
-### What the migration creates
+Run **both** migration files, in order (`…_init.sql`, then `…_household.sql`).
+
+### What the migrations create
 
 - Tables: `profiles`, `user_settings`, `categories`, `payment_methods`, `recurring_rules`, `recurring_occurrences`, `monthly_budgets`, `obligations`, `transactions`, `payment_allocations`, `push_subscriptions`, `audit_log` — UUID keys, `created_at`/`updated_at`, all money as `NUMERIC(14,2)`.
 - Views: `obligation_balances`, `obligation_status` (security-invoker, so RLS applies).
 - RPCs: `ensure_month`, `record_payment`, `unmark_obligation`, `update_obligation_budget`, `copy_month_budget`, `restore_backup`, `seed_my_defaults`.
 - Security: RLS on every table (`user_id = auth.uid()`); composite `(id, user_id)` foreign keys, so a row can never reference another user's data; allocations, occurrences and the audit log are read-only to clients; `anon` has no access.
 - Audit: every insert/update/delete on transactions and obligations is recorded in `audit_log`.
+- Household (`…_household.sql`): `households`, `household_members`, `household_items`, `shopping_requests`, `household_purchases`; RPCs `create_household`, `request_household_item`, `record_household_purchase`; server-only `household_add_member`, `find_user_id_by_email`, `ensure_month_for`. Members can only see their own household; nothing grants access to another member's finances. Household tables are added to Supabase Realtime for live list updates.
 
 ---
 
@@ -90,7 +94,11 @@ cp .env.example .env.local
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` (or set `NEXT_PUBLIC_SUPABASE_ANON_KEY` instead) |
 
-If they are missing, the app shows a setup page instead of crashing. `NEXT_PUBLIC_*` values are inlined into the browser bundle at **build** time — set them before `npm run build` / deploying, and rebuild after changing them.
+| `SUPABASE_SECRET_KEY` | Server only. `sb_secret_…` from *API keys → Secret keys*. Needed for adding family members, push and the daily job. |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push keys: `npx web-push generate-vapid-keys`. Without them, reminders fall back to showing when the app is opened. |
+| `CRON_SECRET` | Random string; Vercel Cron sends it to `/api/cron/daily` (schedule in `vercel.json`). |
+
+If the Supabase ones are missing, the app shows a setup page instead of crashing. `NEXT_PUBLIC_*` values are inlined into the browser bundle at **build** time — set them before `npm run build` / deploying, and rebuild after changing them.
 
 ---
 
@@ -107,13 +115,13 @@ Useful scripts:
 
 | Command | Does |
 |---|---|
-| `npm test` | 43 tests: database logic in real Postgres (PGlite, runs the actual migration — carry-forward, partial payments, duplicate protection, idempotency, recurrence, RLS isolation, backup round-trip) and the client calculations. |
+| `npm test` | 61 tests (incl. household sharing, privacy and purchases in PGlite, and the forecasting logic): database logic in real Postgres (PGlite, runs the actual migration — carry-forward, partial payments, duplicate protection, idempotency, recurrence, RLS isolation, backup round-trip) and the client calculations. |
 | `npm run typecheck` / `npm run lint` | TypeScript and ESLint (incl. React Compiler rules). |
 | `npm run build` | Production build. |
 | `npm run assets` | Regenerates icons and iOS launch screens into `public/`. |
 | `npm run mock` + `npm run dev:mock` | **No Supabase needed:** an in-memory Supabase stand-in running the real migration in PGlite, with any email/password accepted. Good for UI work and demos. |
 
-End-to-end smoke test (iPhone 13 + desktop, 16 steps incl. the carry-forward example): start `npm run mock` and `npm run dev:mock`, then `npm i --no-save playwright && npx playwright install chromium && node tests/e2e/smoke.cjs`. Screenshots land in `.e2e-shots/`.
+End-to-end tests: `tests/e2e/household.cjs` (two iPhones, invite, instant push delivery to a local HTTPS sink, forecasts, cron) and the smoke test (iPhone 13 + desktop, 16 steps incl. the carry-forward example): start `npm run mock` and `npm run dev:mock`, then `npm i --no-save playwright && npx playwright install chromium && node tests/e2e/smoke.cjs`. Screenshots land in `.e2e-shots/`.
 
 ---
 
@@ -144,6 +152,15 @@ Put it behind HTTPS. The app is static app shells + a small proxy (session refre
 **Before going live:** restrict sign-ups if it is just for you, enable leaked-password protection and (optionally) MFA in Supabase Auth, and schedule backups (*Settings → Data → Download backup*, or Supabase's own backups on paid plans).
 
 ---
+
+## Household & notifications setup
+
+1. Run `supabase/migrations/20261108000000_household.sql` in the Supabase SQL editor.
+2. In Vercel → Settings → Environment Variables add `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, then redeploy. `vercel.json` registers the daily job (02:30 UTC = 08:30 Dhaka; Vercel Hobby runs it once a day within that hour).
+3. In the app: **Household → Create household**, then **Settings → Household → Add family member** (name, email, a password you give them). The account is created by the server — no email link — and only shows the Household section.
+4. On each iPhone: open the app from the Home Screen icon → **Settings → Notifications → Turn on notifications** (a test notification confirms it works). iOS needs 16.4+ and the Home Screen app.
+
+How forecasts work: each purchase starts a "window" that ends at the next *running low* request (or the next purchase). Quantity ÷ days gives a usage rate (pooled over the last four windows), which projects the latest purchase forward to a run-out date. Items expected to run out within 3 days are suggested on the list (2 days for the morning alert). Logic: `src/lib/household/predict.ts` (unit-tested).
 
 ## Project structure
 

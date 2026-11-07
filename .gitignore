@@ -41,3 +41,4 @@ yarn-error.log*
 next-env.d.ts
 .e2e-shots/
 !.env.example
+tests/e2e/*.pem

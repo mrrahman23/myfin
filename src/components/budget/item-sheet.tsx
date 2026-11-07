@@ -10,7 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { formatDate, isValidISODate, monthLabel, relativeDue } from "@/lib/dates";
 import { errorMessage } from "@/lib/data/errors";
-import { useCategories, useCurrency, useObligationHistory, usePaymentMethods, useToday } from "@/lib/data/hooks";
+import { useCategories, useCurrency, useObligationHistory, usePaymentMethods, useSettings, useToday } from "@/lib/data/hooks";
 import {
   deleteObligation,
   deleteTransaction,
@@ -71,6 +71,22 @@ function ItemDetails({ item, onPay, onEdit }: { item: LineItem; onPay: () => voi
   const [settling, setSettling] = useState(false);
   const [actual, setActual] = useState(item.hasActual ? String(item.charge / 100) : "");
   const [savingActual, setSavingActual] = useState(false);
+  const [savingDue, setSavingDue] = useState(false);
+  const { data: settings } = useSettings();
+
+  async function saveDue(value: string) {
+    if (value && !isValidISODate(value)) return;
+    setSavingDue(true);
+    try {
+      await updateObligation(item.id, { due_date: value || null });
+      await refreshAll();
+      toast.success(value ? `Due ${formatDate(value, year)} — you'll be reminded` : "Due date cleared");
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setSavingDue(false);
+    }
+  }
   const isIncome = item.kind === "income";
   const year = +today.slice(0, 4);
 
@@ -172,19 +188,30 @@ function ItemDetails({ item, onPay, onEdit }: { item: LineItem; onPay: () => voi
           value={<Money value={Math.max(0, item.ownOutstanding)} className="font-semibold" />}
         />
         {item.ownOutstanding < 0 ? <Row label="Overpaid (credit)" value={<Money value={-item.ownOutstanding} />} /> : null}
-        <Row
-          label="Due date"
-          value={
-            item.dueDate ? (
-              <span className={cn(item.overdue && "font-semibold text-negative")}>
-                {formatDate(item.dueDate, year)}
-                {item.state !== "paid" ? <span className="ml-1 text-ink-3">· {relativeDue(item.dueDate, today)}</span> : null}
-              </span>
-            ) : (
-              "—"
-            )
-          }
-        />
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+          <dt className="text-ink-2">
+            Due date
+            <span className="block text-[11.5px] text-ink-3">
+              {item.dueDate && item.state !== "paid" ? (
+                <span className={cn(item.overdue && "font-semibold text-negative")}>{relativeDue(item.dueDate, today)}</span>
+              ) : settings?.notifications_enabled ? (
+                `Reminder ${settings.reminder_days_before ? `${settings.reminder_days_before} days before & ` : ""}on the day`
+              ) : (
+                "Set a date to get reminded"
+              )}
+            </span>
+          </dt>
+          <dd>
+            <Input
+              type="date"
+              aria-label="Due date"
+              value={item.dueDate ?? ""}
+              disabled={savingDue}
+              onChange={(e) => saveDue(e.target.value)}
+              className="h-10 w-[160px] text-[15px]"
+            />
+          </dd>
+        </div>
       </dl>
 
       {item.row.notes ? <p className="rounded-2xl bg-surface-2 px-4 py-3 text-[14px] text-ink-2">{item.row.notes}</p> : null}

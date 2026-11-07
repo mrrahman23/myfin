@@ -23,6 +23,10 @@ export interface UserSettings {
   notifications_enabled: boolean;
   notify_overdue: boolean;
   reminder_days_before: number;
+  finance_enabled: boolean;
+  notify_household_requests: boolean;
+  notify_household_purchases: boolean;
+  notify_household_predictions: boolean;
   created_at: string;
   updated_at: string;
 }

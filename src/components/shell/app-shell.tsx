@@ -11,11 +11,12 @@ import {
   LayoutDashboard,
   Plus,
   Settings2,
+  ShoppingBasket,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { TransactionSheet, type TransactionPreset } from "@/components/transactions/transaction-sheet";
 import { Sheet } from "@/components/ui/sheet";
@@ -27,13 +28,39 @@ import { useOpenItems, useSettings, useToday } from "@/lib/data/hooks";
 import { useReminderNotifications } from "@/lib/notifications";
 import type { Transaction } from "@/lib/types";
 
-const NAV: Array<{ href: string; label: string; icon: LucideIcon }> = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/budget", label: "Budget", icon: Wallet },
-  { href: "/analytics", label: "Analytics", icon: ChartPie },
-  { href: "/settings", label: "Settings", icon: Settings2 },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  /** Personal-finance section (hidden for household-only accounts). */
+  finance?: boolean;
+  /** Shown in the phone tab bar (max 5). */
+  tab?: boolean;
+}
+
+const NAV: NavItem[] = [
+  { href: "/", label: "Overview", icon: LayoutDashboard, finance: true, tab: true },
+  { href: "/budget", label: "Budget", icon: Wallet, finance: true, tab: true },
+  { href: "/household", label: "Household", icon: ShoppingBasket, tab: true },
+  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight, finance: true, tab: true },
+  { href: "/analytics", label: "Analytics", icon: ChartPie, finance: true },
+  { href: "/settings", label: "Settings", icon: Settings2, tab: true },
 ];
+
+function useFinanceEnabled() {
+  return useSettings().data?.finance_enabled !== false;
+}
+
+function useNav() {
+  const finance = useFinanceEnabled();
+  return NAV.filter((n) => finance || !n.finance);
+}
+
+/** Opens the "add to shopping list" sheet (navigating to Household if needed). */
+export function openShoppingAdd(router: ReturnType<typeof useRouter>, pathname: string) {
+  if (pathname === "/household") window.dispatchEvent(new Event("myfin:add-shopping"));
+  else router.push("/household?add=1");
+}
 
 // ---------------------------------------------------------------------------
 // Quick add context — any page can open the transaction sheet
@@ -70,6 +97,10 @@ function ShellInner({ children }: { children: ReactNode }) {
     open: false,
   });
   const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const finance = useFinanceEnabled();
+  const onAdd = () => (finance ? setMenuOpen(true) : openShoppingAdd(router, pathname));
   const api = useMemo<QuickAddApi>(
     () => ({
       openNew: (preset) => setSheet({ open: true, preset, transaction: null }),
@@ -97,11 +128,11 @@ function ShellInner({ children }: { children: ReactNode }) {
   return (
     <QuickAddContext.Provider value={api}>
       <div className="min-h-dvh lg:pl-[248px]">
-        <Sidebar onAdd={() => setMenuOpen(true)} />
+        <Sidebar onAdd={onAdd} />
         <main className="mx-auto w-full max-w-[1180px] px-4 pb-[calc(env(safe-area-inset-bottom)+108px)] pt-[max(env(safe-area-inset-top),12px)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:px-6 lg:px-10 lg:pb-12 lg:pt-8">
           {children}
         </main>
-        <BottomNav onAdd={() => setMenuOpen(true)} />
+        <BottomNav onAdd={onAdd} />
       </div>
 
       <QuickAddMenu
@@ -109,7 +140,8 @@ function ShellInner({ children }: { children: ReactNode }) {
         onClose={() => setMenuOpen(false)}
         onPick={(kind) => {
           setMenuOpen(false);
-          api.openNew({ kind });
+          if (kind === "shopping") openShoppingAdd(router, pathname);
+          else api.openNew({ kind });
         }}
       />
       <TransactionSheet
@@ -143,6 +175,8 @@ function isActive(pathname: string, href: string) {
 
 function Sidebar({ onAdd }: { onAdd: () => void }) {
   const pathname = usePathname();
+  const nav = useNav();
+  const finance = useFinanceEnabled();
   const { items } = useOpenItems();
   const today = useToday();
   const overdue = items?.filter((i) => i.overdue).length ?? 0;
@@ -162,7 +196,7 @@ function Sidebar({ onAdd }: { onAdd: () => void }) {
         <Plus className="h-4 w-4" strokeWidth={2.6} /> Quick add
       </button>
       <nav className="space-y-1" aria-label="Main">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {nav.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
             <Link
@@ -179,6 +213,7 @@ function Sidebar({ onAdd }: { onAdd: () => void }) {
             </Link>
           );
         })}
+        {finance ? (
         <Link
           href="/reminders"
           aria-current={isActive(pathname, "/reminders") ? "page" : undefined}
@@ -200,6 +235,7 @@ function Sidebar({ onAdd }: { onAdd: () => void }) {
             </span>
           ) : null}
         </Link>
+        ) : null}
       </nav>
       <div className="mt-auto px-3 text-[12px] text-ink-3">Today · {today}</div>
     </aside>
@@ -226,6 +262,7 @@ function useHideOnScroll() {
 
 function BottomNav({ onAdd }: { onAdd: () => void }) {
   const pathname = usePathname();
+  const tabs = useNav().filter((n) => n.tab);
   const fabHidden = useHideOnScroll();
   return (
     <>
@@ -244,8 +281,8 @@ function BottomNav({ onAdd }: { onAdd: () => void }) {
         aria-label="Main"
         className="glass fixed inset-x-0 bottom-0 z-40 border-t border-line pb-[env(safe-area-inset-bottom)] pl-safe pr-safe lg:hidden"
       >
-        <div className="mx-auto grid h-[64px] max-w-xl grid-cols-5">
-          {NAV.map(({ href, label, icon: Icon }) => {
+        <div className="mx-auto grid h-[64px] max-w-xl" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+          {tabs.map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);
             return (
               <Link
@@ -275,7 +312,7 @@ function QuickAddMenu({
 }: {
   open: boolean;
   onClose: () => void;
-  onPick: (k: "expense" | "income" | "transfer" | "adjustment") => void;
+  onPick: (k: "expense" | "income" | "transfer" | "adjustment" | "shopping") => void;
 }) {
   const options = [
     { kind: "expense" as const, label: "Add expense", desc: "Bill, purchase or payment", icon: ArrowUpRight, tone: "text-expense" },
@@ -301,6 +338,17 @@ function QuickAddMenu({
             </span>
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => onPick("shopping")}
+          className="col-span-2 flex items-center gap-3 rounded-2xl border border-line bg-surface-2 p-4 text-left transition hover:bg-surface-3 active:scale-[0.98]"
+        >
+          <ShoppingBasket className="h-6 w-6 text-positive" strokeWidth={2.2} />
+          <span>
+            <span className="block text-[15px] font-semibold">Shopping list</span>
+            <span className="mt-0.5 block text-[12px] leading-snug text-ink-3">Add something that&apos;s running low at home</span>
+          </span>
+        </button>
       </div>
     </Sheet>
   );

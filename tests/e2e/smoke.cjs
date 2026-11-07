@@ -140,7 +140,7 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3000";
     await page.getByText("1 transaction", { exact: true }).waitFor();
   });
   await step("analytics", async () => {
-    await page.getByRole("link", { name: "Analytics", exact: true }).click();
+    await page.goto("/analytics");
     await page.getByText("Income vs expenses by month").waitFor();
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${OUT}/14-analytics-full.png`, fullPage: true });

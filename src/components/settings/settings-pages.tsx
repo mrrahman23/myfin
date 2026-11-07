@@ -2,7 +2,7 @@
 
 import { Download, FileJson, FileSpreadsheet, KeyRound, LogOut, MonitorSmartphone, Plus, Share, SquarePlus, Upload } from "lucide-react";
 import { useRef, useState } from "react";
-import { NotificationCard } from "@/components/overview/reminders-view";
+import { NotificationCard } from "@/components/settings/notification-card";
 import { Button, Card, Field, Input, Segmented, Select, Switch } from "@/components/ui/primitives";
 import { ConfirmSheet } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
@@ -116,6 +116,19 @@ export function PreferenceSettings() {
               ))}
             </Select>
           </Field>
+        </div>
+      </SettingsGroup>
+      <SettingsGroup
+        title="Sections"
+        footer={settings.finance_enabled ? "Turn off to use myFin only for the household list. Your finance data is kept." : "Turn on to track your own budget and transactions. It starts empty and is private to you."}
+      >
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <span className="text-[15px]">Personal finance</span>
+          <Switch
+            checked={settings.finance_enabled}
+            onChange={(v) => save({ finance_enabled: v }, v ? "Personal finance turned on" : "Personal finance hidden")}
+            label="Personal finance"
+          />
         </div>
       </SettingsGroup>
       <SettingsGroup title="Appearance">

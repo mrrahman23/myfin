@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_KEY, SUPABASE_URL, isSupabaseConfigured } from "./lib/env";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/setup", "/offline"];
+// API routes authenticate themselves (session cookie, cron secret)
+const PUBLIC_PATHS = ["/login", "/auth", "/setup", "/offline", "/api"];
 
 /**
  * Refreshes the Supabase session cookie and performs an optimistic auth

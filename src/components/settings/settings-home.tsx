@@ -9,6 +9,7 @@ import {
   Palette,
   Repeat,
   Shapes,
+  ShoppingBasket,
   ShieldCheck,
   Smartphone,
   UserRound,
@@ -19,6 +20,7 @@ import { useSession } from "@/lib/data/app-context";
 import { useCategories, usePaymentMethods, useProfile, useRecurringRules, useSettings } from "@/lib/data/hooks";
 import { CURRENCIES } from "@/lib/money";
 import { getSupabase } from "@/lib/supabase/client";
+import { useHousehold } from "@/lib/household/hooks";
 import { SettingsGroup, SettingsRow } from "./settings-ui";
 
 export function SettingsHome() {
@@ -28,6 +30,8 @@ export function SettingsHome() {
   const { data: categories } = useCategories();
   const { data: methods } = usePaymentMethods();
   const { data: rules } = useRecurringRules();
+  const { household } = useHousehold();
+  const finance = settings?.finance_enabled !== false;
   const name = profile?.full_name || user?.email?.split("@")[0] || "You";
   const initials = name
     .split(/\s+/)
@@ -78,11 +82,17 @@ export function SettingsHome() {
         />
       </SettingsGroup>
 
+      <SettingsGroup title="Household">
+        <SettingsRow icon={ShoppingBasket} tone="green" label="Household & family" value={household?.name} href="/settings/household" />
+      </SettingsGroup>
+
+      {finance ? (
       <SettingsGroup title="Budget setup">
         <SettingsRow icon={Shapes} tone="orange" label="Categories" value={categories ? String(categories.filter((c) => !c.is_archived).length) : undefined} href="/settings/categories" />
         <SettingsRow icon={Repeat} tone="blue" label="Recurring items" value={rules ? String(rules.filter((r) => r.is_active).length) : undefined} href="/settings/recurring" />
         <SettingsRow icon={CreditCard} tone="yellow" label="Payment methods" value={methods ? String(methods.filter((m) => !m.is_archived).length) : undefined} href="/settings/payment-methods" />
       </SettingsGroup>
+      ) : null}
 
       <SettingsGroup title="Data">
         <SettingsRow icon={Database} tone="gray" label="Export, backup & restore" href="/settings/data" />

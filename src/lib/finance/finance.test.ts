@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, dateInPeriod, daysBetween, periodOf, relativeDue, todayISO } from "../dates";
+import { addMonths, dateInPeriod, daysBetween, periodOf, relativeDue, timeAgo, todayISO } from "../dates";
 import { formatMoney, parseAmount, toDecimalString, toMinor } from "../money";
 import type { ObligationStatusRow, Transaction } from "../types";
 import { analyzeYear, foldSlices } from "./analytics";
@@ -89,6 +89,10 @@ describe("dates", () => {
     expect(dateInPeriod("2026-02-01", 31)).toBe("2026-02-28");
     expect(daysBetween("2026-11-07", "2026-11-10")).toBe(3);
     expect(relativeDue("2026-11-05", "2026-11-07")).toBe("2 days overdue");
+    const now = new Date("2026-11-07T10:00:00Z");
+    expect(timeAgo("2026-11-07 07:00:00.123+00", now)).toBe("3h ago");
+    expect(timeAgo("2026-11-07T09:58:00.123456+00:00", now)).toBe("2m ago");
+    expect(timeAgo("garbage", now)).toBe("");
   });
 });
 

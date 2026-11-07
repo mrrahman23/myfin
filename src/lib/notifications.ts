@@ -50,12 +50,14 @@ const SENT_KEY = "myfin-reminders-sent";
  */
 export function useReminderNotifications(service: NotificationService = webNotifications) {
   const { data: settings } = useSettings();
+  // With server push configured, the daily cron sends reminders instead.
+  const localMode = !process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const { items } = useOpenItems();
   const today = useToday();
   const currency = useCurrency();
 
   useEffect(() => {
-    if (!settings?.notifications_enabled || !items || service.permission() !== "granted") return;
+    if (!localMode || !settings?.notifications_enabled || !settings.finance_enabled || !items || service.permission() !== "granted") return;
     let sent: Record<string, string> = {};
     try {
       sent = JSON.parse(localStorage.getItem(SENT_KEY) || "{}");
@@ -98,5 +100,5 @@ export function useReminderNotifications(service: NotificationService = webNotif
       }
     };
     void run();
-  }, [settings, items, today, currency, service]);
+  }, [settings, items, today, currency, service, localMode]);
 }

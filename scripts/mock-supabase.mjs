@@ -18,6 +18,8 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 
 const PORT = Number(process.env.MOCK_PORT ?? 54321);
+// Use this as SUPABASE_SECRET_KEY to act as service_role (bypasses RLS).
+const SERVICE_KEY = process.env.MOCK_SERVICE_KEY ?? "mock-secret";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const raw = (v) => v;
@@ -35,6 +37,8 @@ const migrations = join(root, "supabase/migrations");
 for (const f of readdirSync(migrations).filter((f) => f.endsWith(".sql")).sort()) {
   await db.exec(readFileSync(join(migrations, f), "utf8"));
 }
+await db.exec(`grant all on all tables in schema public to service_role;
+  grant execute on all functions in schema public to service_role;`);
 console.log("mock-supabase: migrations applied");
 
 // --------------------------------------------------------------------------- auth
@@ -49,14 +53,16 @@ function makeSession(user) {
   ].join(".");
   return { access_token: token, token_type: "bearer", expires_in: 86400, expires_at: exp, refresh_token: `r-${user.id}`, user };
 }
-async function ensureUser(email, fullName) {
+async function ensureUser(email, fullName, meta = {}) {
   if (users.has(email)) return users.get(email);
   const id = randomUUID();
-  await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)`, [id, email, JSON.stringify({ full_name: fullName ?? "" })]);
-  const user = { id, aud: "authenticated", role: "authenticated", email, user_metadata: { full_name: fullName ?? "" }, app_metadata: { provider: "email" }, created_at: new Date().toISOString() };
+  const metadata = { full_name: fullName ?? "", ...meta };
+  await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)`, [id, email, JSON.stringify(metadata)]);
+  const user = { id, aud: "authenticated", role: "authenticated", email, user_metadata: metadata, app_metadata: { provider: "email" }, created_at: new Date().toISOString() };
   users.set(email, user);
   return user;
 }
+const isService = (req) => (req.headers.authorization ?? "").replace(/^Bearer /i, "") === SERVICE_KEY;
 function userFromAuth(req) {
   const token = (req.headers.authorization ?? "").replace(/^Bearer /i, "");
   try {
@@ -114,9 +120,10 @@ function selectList(url) {
 
 async function rest(req, url, body, user) {
   const path = url.pathname.replace(/^\/rest\/v1\//, "");
-  const claims = JSON.stringify({ sub: user?.id ?? "", role: user ? "authenticated" : "anon" });
+  const role = isService(req) ? "service_role" : user ? "authenticated" : "anon";
+  const claims = JSON.stringify({ sub: user?.id ?? "", role });
   return db.transaction(async (tx) => {
-    await tx.query(`set local role ${user ? "authenticated" : "anon"}`);
+    await tx.query(`set local role ${role}`);
     await tx.query(`select set_config('request.jwt.claims', $1, true)`, [claims]);
     const params = [];
     if (path.startsWith("rpc/")) {
@@ -224,6 +231,13 @@ createServer(async (req, res) => {
       return send(res, 200, user);
     }
     if (url.pathname === "/auth/v1/logout") return send(res, 204);
+    if (url.pathname === "/auth/v1/admin/users" && req.method === "POST") {
+      if (!isService(req)) return send(res, 401, { msg: "service role required" });
+      const email = String(body?.email ?? "").toLowerCase();
+      if (users.has(email)) return send(res, 422, { code: "email_exists", msg: "A user with this email address has already been registered" });
+      const user = await ensureUser(email, body?.user_metadata?.full_name, body?.user_metadata ?? {});
+      return send(res, 200, user);
+    }
     if (url.pathname.startsWith("/auth/v1/")) return send(res, 200, {});
     if (url.pathname.startsWith("/rest/v1/")) {
       const { status, json } = await rest(req, url, body, userFromAuth(req));

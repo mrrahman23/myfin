@@ -35,14 +35,24 @@ export async function createTestDb() {
 export type TestDb = Awaited<ReturnType<typeof createTestDb>>;
 
 /** Creates an auth user (fires the seed trigger) and returns its id. */
-export async function createUser(db: TestDb, id: string, fullName = "Test User") {
+export async function createUser(db: TestDb, id: string, fullName = "Test User", meta: Record<string, unknown> = {}) {
   await db.query(`reset role`);
   await db.query(`insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)`, [
     id,
     `${id.slice(0, 8)}@example.com`,
-    JSON.stringify({ full_name: fullName }),
+    JSON.stringify({ full_name: fullName, ...meta }),
   ]);
   return id;
+}
+
+/** Run queries as the server (service_role bypasses RLS). */
+export async function asService<T>(db: TestDb, fn: () => Promise<T>): Promise<T> {
+  await db.query(`set role service_role`);
+  try {
+    return await fn();
+  } finally {
+    await db.query(`reset role`);
+  }
 }
 
 /** Run queries as a signed-in user through RLS (role `authenticated`). */

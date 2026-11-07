@@ -122,3 +122,16 @@ export function isValidISODate(s: string) {
   const { y, m, d } = parseISO(s);
   return m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
+
+/** "just now", "5m ago", "3h ago", "2d ago" for timestamps. */
+export function timeAgo(iso: string, now: Date = new Date()): string {
+  const normalised = (iso.includes("T") || iso.includes(" ") ? iso.replace(" ", "T") : `${iso}T00:00:00`).replace(/([+-]\d{2})$/, "$1:00");
+  const t = new Date(normalised).getTime();
+  if (Number.isNaN(t)) return "";
+  const s = Math.max(0, Math.round((now.getTime() - t) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 86400 * 30) return `${Math.floor(s / 86400)}d ago`;
+  return `${Math.floor(s / (86400 * 30))}mo ago`;
+}

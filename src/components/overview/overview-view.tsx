@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Bell,
   CalendarClock,
+  ChartPie,
   ChevronRight,
   Clock,
   PiggyBank,
@@ -14,7 +15,8 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ItemRow } from "@/components/budget/item-row";
 import { ItemSheet } from "@/components/budget/item-sheet";
 import { usePayToggle } from "@/components/budget/use-pay-toggle";
@@ -52,6 +54,11 @@ export function OverviewView() {
   const pay = usePayToggle();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const router = useRouter();
+  useEffect(() => {
+    if (settings && settings.finance_enabled === false) router.replace("/household");
+  }, [settings, router]);
+
   const firstName = (profile?.full_name || user?.email?.split("@")[0] || "").split(" ")[0];
   const catMap = useMemo(() => new Map((categories ?? []).map((c) => [c.id, c])), [categories]);
   const methodMap = useMemo(() => new Map((methods ?? []).map((m) => [m.id, m])), [methods]);
@@ -77,7 +84,13 @@ export function OverviewView() {
 
   return (
     <>
-      <PageHeader title={firstName ? `${greeting(settings?.timezone ?? "Asia/Dhaka")}, ${firstName}` : greeting(settings?.timezone ?? "Asia/Dhaka")} subtitle={monthLabel(period)} showMonth />
+      <PageHeader
+        actions={
+          <Link href="/analytics" aria-label="Analytics" className="grid h-10 w-10 place-items-center rounded-full border border-line bg-surface text-ink-2 shadow-card lg:hidden">
+            <ChartPie className="h-[18px] w-[18px]" />
+          </Link>
+        }
+        title={firstName ? `${greeting(settings?.timezone ?? "Asia/Dhaka")}, ${firstName}` : greeting(settings?.timezone ?? "Asia/Dhaka")} subtitle={monthLabel(period)} showMonth />
 
       {error ? <Card className="mb-4 p-5 text-[14px] text-negative">{errorMessage(error)}</Card> : null}
 
