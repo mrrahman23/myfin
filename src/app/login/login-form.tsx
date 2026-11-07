@@ -1,7 +1,7 @@
 "use client";
 
 import { Mail } from "lucide-react";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button, Card, Field, Input, Segmented } from "@/components/ui/primitives";
 import { getSupabase } from "@/lib/supabase/client";
 
@@ -12,7 +12,29 @@ function nextPath() {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
 }
 
+const LINK_ERRORS: Record<string, string> = {
+  otp_expired: "That email link has expired or was already used (some work email systems open links to scan them). Request a new one below, or just sign in with your password if your email is confirmed.",
+  link: "That sign-in link didn't work. Request a new one below, or sign in with your password.",
+};
+
+const noopSubscribe = () => () => {};
+
+/** Error code passed back from /auth/callback (or by Supabase in the URL hash). */
+function useLinkError() {
+  const code = useSyncExternalStore(
+    noopSubscribe,
+    () => {
+      const q = new URLSearchParams(window.location.search);
+      const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      return h.get("error_code") ?? q.get("error_code") ?? q.get("error") ?? "";
+    },
+    () => "",
+  );
+  return code ? (LINK_ERRORS[code] ?? LINK_ERRORS.link) : null;
+}
+
 export function LoginForm() {
+  const linkError = useLinkError();
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -48,7 +70,7 @@ export function LoginForm() {
       if (error) throw error;
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       if (data.session) window.location.assign("/");
-      else setNotice("Check your inbox to confirm your email, then sign in.");
+      else setNotice("Check your inbox to confirm your email, then sign in. No email? Use “Resend confirmation” below.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -65,6 +87,17 @@ export function LoginForm() {
     setBusy(null);
     if (error) setError(error.message);
     else setNotice("We've emailed you a sign-in link.");
+  }
+
+  async function resend() {
+    setError(null);
+    setNotice(null);
+    if (!email.includes("@")) return setError("Enter your email first");
+    setBusy("resend");
+    const { error } = await getSupabase().auth.resend({ type: "signup", email, options: { emailRedirectTo: callback() } });
+    setBusy(null);
+    if (error) setError(error.message);
+    else setNotice("A new confirmation link is on its way. Open it on this device within an hour.");
   }
 
   async function forgot() {
@@ -113,6 +146,9 @@ export function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </Field>
+        {linkError && !error && !notice ? (
+          <p role="alert" className="rounded-xl bg-warning-soft px-3 py-2 text-[13px] text-ink-2">{linkError}</p>
+        ) : null}
         {error ? <p role="alert" className="rounded-xl bg-negative-soft px-3 py-2 text-[13px] text-negative">{error}</p> : null}
         {notice ? <p role="status" className="rounded-xl bg-positive-soft px-3 py-2 text-[13px] text-positive">{notice}</p> : null}
         <Button type="submit" size="lg" loading={busy === "password"}>
@@ -131,6 +167,9 @@ export function LoginForm() {
       ) : (
         <p className="mt-4 text-center text-[12px] text-ink-3">Your account starts with your default income and expense budget, ready to edit.</p>
       )}
+      <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={resend} loading={busy === "resend"}>
+        Resend confirmation email
+      </Button>
     </Card>
   );
 }

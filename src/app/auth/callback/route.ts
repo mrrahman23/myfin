@@ -11,6 +11,12 @@ export async function GET(request: NextRequest) {
   const nextParam = url.searchParams.get("next") ?? "/";
   const next = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
 
+  // Supabase reports expired/used links as query params on the redirect
+  const linkError = url.searchParams.get("error_code") ?? url.searchParams.get("error");
+  if (linkError && !code && !tokenHash) {
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(linkError)}`, url.origin));
+  }
+
   const supabase = await getServerSupabase();
   let failed = false;
   if (code) {
