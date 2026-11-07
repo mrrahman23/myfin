@@ -1,26 +1,232 @@
 @import "tailwindcss";
 
+/* Theme is resolved to data-theme="light|dark" on <html> before paint. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #f6f6f9;
+  --surface-3: #ececf1;
+  --elevated: rgba(255, 255, 255, 0.82);
+  --border: rgba(11, 11, 15, 0.07);
+  --border-strong: rgba(11, 11, 15, 0.13);
+  --ink: #0b0b0f;
+  --ink-2: #5d5d66;
+  --ink-3: #8e8e97;
+  --inverse: #ffffff;
+  --accent: #2a78d6;
+  --accent-soft: rgba(42, 120, 214, 0.1);
+  /* semantic money colors */
+  --income: #2a78d6;
+  --expense: #eb6834;
+  --positive: #108a3a;
+  --positive-soft: rgba(16, 138, 58, 0.1);
+  --negative: #d03b3b;
+  --negative-soft: rgba(208, 59, 59, 0.1);
+  --warning: #b97800;
+  --warning-soft: rgba(250, 178, 25, 0.16);
+  /* charts */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
+  --series-other: #a3a29b;
+  --diverge-under: #2a78d6;
+  --diverge-over: #d03b3b;
+  --grid: #e6e5df;
+  --axis: #8e8e97;
+  --shadow-card: 0 1px 2px rgba(11, 11, 15, 0.04), 0 8px 24px -12px rgba(11, 11, 15, 0.08);
+  --shadow-float: 0 12px 40px -12px rgba(11, 11, 15, 0.25), 0 2px 6px rgba(11, 11, 15, 0.06);
+  --hero-from: #101828;
+  --hero-to: #233a63;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #151517;
+  --surface-2: #1d1d20;
+  --surface-3: #2a2a2e;
+  --elevated: rgba(28, 28, 31, 0.82);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --ink: #f5f5f7;
+  --ink-2: #a8a8b3;
+  --ink-3: #75757f;
+  --inverse: #0b0b0f;
+  --accent: #3987e5;
+  --accent-soft: rgba(57, 135, 229, 0.16);
+  --income: #3987e5;
+  --expense: #d95926;
+  --positive: #2fbf5b;
+  --positive-soft: rgba(47, 191, 91, 0.14);
+  --negative: #ef6060;
+  --negative-soft: rgba(239, 96, 96, 0.14);
+  --warning: #fab219;
+  --warning-soft: rgba(250, 178, 25, 0.14);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --series-other: #6b6a65;
+  --diverge-under: #3987e5;
+  --diverge-over: #e66767;
+  --grid: #2a2a2c;
+  --axis: #75757f;
+  --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow-float: 0 16px 48px -12px rgba(0, 0, 0, 0.7);
+  --hero-from: #1a2540;
+  --hero-to: #0e1424;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-elevated: var(--elevated);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-inverse: var(--inverse);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-income: var(--income);
+  --color-expense: var(--expense);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-negative: var(--negative);
+  --color-negative-soft: var(--negative-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto,
+    sans-serif;
+  --shadow-card: var(--shadow-card);
+  --shadow-float: var(--shadow-float);
+  --radius-card: 1.25rem;
+  --animate-fade-in: fade-in 180ms ease-out both;
+  --animate-rise: rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-sheet-up: sheet-up 320ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  --animate-pop: pop 300ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  --animate-toast: toast-in 280ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes pop {
+  0% { transform: scale(0.6); }
+  100% { transform: scale(1); }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (min-width: 640px) {
+  @keyframes sheet-up {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: none; }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    background: var(--bg);
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  button,
+  [role="button"] {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+  input[type="date"] {
+    min-height: 1.5rem;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility glass {
+  background: var(--elevated);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }

@@ -1,0 +1,8 @@
+import { AppShell } from "@/components/shell/app-shell";
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return <AppShell>{children}</AppShell>;
+}
+
+/** Client-rendered behind auth; opt out of instant-navigation validation. */
+export const instant = false;
